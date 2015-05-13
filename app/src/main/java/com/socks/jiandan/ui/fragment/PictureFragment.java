@@ -1,13 +1,13 @@
 package com.socks.jiandan.ui.fragment;
 
-import android.content.ClipData;
-import android.content.ClipboardManager;
-import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.support.v4.widget.SwipeRefreshLayout;
+import android.support.v7.widget.CardView;
 import android.support.v7.widget.DefaultItemAnimator;
+import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -15,28 +15,43 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import com.afollestad.materialdialogs.MaterialDialog;
 import com.android.volley.Response;
 import com.android.volley.VolleyError;
+import com.nostra13.universalimageloader.core.DisplayImageOptions;
+import com.nostra13.universalimageloader.core.ImageLoader;
+import com.nostra13.universalimageloader.core.listener.ImageLoadingProgressListener;
+import com.nostra13.universalimageloader.core.listener.SimpleImageLoadingListener;
 import com.socks.jiandan.R;
 import com.socks.jiandan.base.BaseFragment;
+import com.socks.jiandan.cache.PictureCacheUtil;
 import com.socks.jiandan.callback.LoadFinishCallBack;
 import com.socks.jiandan.constant.ToastMsg;
-import com.socks.jiandan.model.Comment;
+import com.socks.jiandan.model.CommentNumber;
+import com.socks.jiandan.model.NetWorkEvent;
 import com.socks.jiandan.model.Picture;
 import com.socks.jiandan.model.Vote;
+import com.socks.jiandan.net.JSONParser;
 import com.socks.jiandan.net.Request4CommentCounts;
 import com.socks.jiandan.net.Request4Picture;
 import com.socks.jiandan.net.Request4Vote;
 import com.socks.jiandan.ui.CommentListActivity;
+import com.socks.jiandan.ui.ImageDetailActivity;
+import com.socks.jiandan.utils.FileUtil;
+import com.socks.jiandan.utils.NetWorkUtil;
 import com.socks.jiandan.utils.ShareUtil;
 import com.socks.jiandan.utils.ShowToast;
 import com.socks.jiandan.utils.String2TimeUtil;
+import com.socks.jiandan.utils.TextUtil;
 import com.socks.jiandan.view.AutoLoadRecyclerView;
+import com.socks.jiandan.view.ShowMaxImageView;
 import com.socks.jiandan.view.googleprogressbar.GoogleProgressBar;
 import com.socks.jiandan.view.matchview.MatchTextView;
 
@@ -44,9 +59,10 @@ import java.util.ArrayList;
 
 import butterknife.ButterKnife;
 import butterknife.InjectView;
+import de.greenrobot.event.EventBus;
 
 /**
- * 段子碎片
+ * 无聊图碎片
  *
  * @author zhaokaiqiang
  */
@@ -63,6 +79,14 @@ public class PictureFragment extends BaseFragment {
 
 	private PictureAdapter mAdapter;
 	private LoadFinishCallBack mLoadFinisCallBack;
+	private ImageLoader imageLoader;
+	private DisplayImageOptions options;
+
+	private boolean isWifiConnected;
+	//用于记录是否是首次进入
+	private boolean isFirstChange;
+	//记录最后一次提示显示时间，防止多次提示
+	private long lastShowTime;
 
 	public PictureFragment() {
 	}
@@ -72,6 +96,13 @@ public class PictureFragment extends BaseFragment {
 		super.onCreate(savedInstanceState);
 		setHasOptionsMenu(true);
 		mActionBar.setTitle("无聊图");
+		isFirstChange = true;
+	}
+
+	@Override
+	public void onStart() {
+		super.onStart();
+		EventBus.getDefault().register(this);
 	}
 
 	@Override
@@ -102,6 +133,8 @@ public class PictureFragment extends BaseFragment {
 			}
 		});
 
+		mRecyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
+
 		return view;
 	}
 
@@ -109,15 +142,62 @@ public class PictureFragment extends BaseFragment {
 	public void onActivityCreated(Bundle savedInstanceState) {
 		super.onActivityCreated(savedInstanceState);
 
+		imageLoader = ImageLoader.getInstance();
+		mRecyclerView.setOnPauseListenerParams(imageLoader, false, true);
+		options = new DisplayImageOptions.Builder()
+				.cacheInMemory(true)
+				.cacheOnDisk(true)
+				.bitmapConfig(Bitmap.Config.RGB_565)
+				.resetViewBeforeLoading(true)
+				.showImageOnLoading(R.drawable.ic_loading_large)
+				.build();
+
 		mAdapter = new PictureAdapter();
 		mRecyclerView.setAdapter(mAdapter);
 		mAdapter.loadFirst();
 
 	}
 
+	public void onEventMainThread(NetWorkEvent event) {
+
+		if (event.getType() == NetWorkEvent.AVAILABLE) {
+
+			if (NetWorkUtil.isWifiConnected(getActivity())) {
+				isWifiConnected = true;
+				if (!isFirstChange && (System.currentTimeMillis() - lastShowTime) > 3000) {
+					ShowToast.Short("已切换为WIFI模式，自动加载GIF图片");
+					lastShowTime = System.currentTimeMillis();
+				}
+
+			} else {
+				isWifiConnected = false;
+				if (!isFirstChange && (System.currentTimeMillis() - lastShowTime) > 3000) {
+					ShowToast.Short("已切换为省流量模式，只加载GIF缩略图");
+					lastShowTime = System.currentTimeMillis();
+				}
+			}
+
+			isFirstChange = false;
+		}
+
+	}
+
+	@Override
+	public void onStop() {
+		super.onStop();
+		EventBus.getDefault().unregister(this);
+	}
+
+	@Override
+	public void onDestroy() {
+		super.onDestroy();
+		//清除内存缓存，避免由于内存缓存造成的图片显示不完整
+		imageLoader.clearMemoryCache();
+	}
+
 	@Override
 	public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
-		inflater.inflate(R.menu.menu_joke, menu);
+		inflater.inflate(R.menu.menu_refresh, menu);
 	}
 
 	@Override
@@ -134,7 +214,7 @@ public class PictureFragment extends BaseFragment {
 
 	@Override
 	public void onActionBarClick() {
-		if (mRecyclerView != null && mAdapter.mJokes.size() > 0) {
+		if (mRecyclerView != null && mAdapter.pictures.size() > 0) {
 			mRecyclerView.scrollToPosition(0);
 		}
 	}
@@ -142,10 +222,26 @@ public class PictureFragment extends BaseFragment {
 	public class PictureAdapter extends RecyclerView.Adapter<ViewHolder> {
 
 		private int page;
-		private ArrayList<Picture> mJokes;
+		private ArrayList<Picture> pictures;
+		private int lastPosition = -1;
 
 		public PictureAdapter() {
-			mJokes = new ArrayList<Picture>();
+			pictures = new ArrayList<Picture>();
+		}
+
+		private void setAnimation(View viewToAnimate, int position) {
+			if (position > lastPosition) {
+				Animation animation = AnimationUtils.loadAnimation(viewToAnimate.getContext(), R
+						.anim.item_bottom_in);
+				viewToAnimate.startAnimation(animation);
+				lastPosition = position;
+			}
+		}
+
+		@Override
+		public void onViewDetachedFromWindow(ViewHolder holder) {
+			super.onViewDetachedFromWindow(holder);
+			holder.card.clearAnimation();
 		}
 
 		@Override
@@ -159,8 +255,66 @@ public class PictureFragment extends BaseFragment {
 		@Override
 		public void onBindViewHolder(final ViewHolder holder, final int position) {
 
-			final Picture picture = mJokes.get(position);
-			holder.tv_content.setText(picture.getText_content().trim());
+			final Picture picture = pictures.get(position);
+
+			String picUrl = picture.getPics()[0];
+
+			if (picUrl.endsWith(".gif")) {
+				holder.img_gif.setVisibility(View.VISIBLE);
+
+				//非WIFI网络情况下，GIF图只加载缩略图，详情页才加载真实图片
+				if (!isWifiConnected) {
+					picUrl = picUrl.replace("mw600", "small").replace("mw1200", "small").replace
+							("large", "small");
+				}
+
+			} else {
+				holder.img_gif.setVisibility(View.GONE);
+			}
+
+			holder.progress.setProgress(0);
+			holder.progress.setVisibility(View.VISIBLE);
+
+			imageLoader.displayImage(picUrl, holder.img, options, new
+							SimpleImageLoadingListener() {
+								@Override
+								public void onLoadingComplete(String imageUri, View view, Bitmap loadedImage) {
+									super.onLoadingComplete(imageUri, view, loadedImage);
+									holder.progress.setVisibility(View.GONE);
+								}
+							},
+					new ImageLoadingProgressListener() {
+						@Override
+						public void onProgressUpdate(String imageUri, View view, int current, int total) {
+							holder.progress.setProgress((int) (current * 100f / total));
+						}
+					});
+
+			if (TextUtil.isNull(picture.getText_content().trim())) {
+				holder.tv_content.setVisibility(View.GONE);
+			} else {
+				holder.tv_content.setVisibility(View.VISIBLE);
+				holder.tv_content.setText(picture.getText_content().trim());
+			}
+
+			holder.img.setOnClickListener(new View.OnClickListener() {
+				@Override
+				public void onClick(View v) {
+					Intent intent = new Intent(getActivity(), ImageDetailActivity.class);
+
+					intent.putExtra("img_author", picture.getComment_author());
+					intent.putExtra("img_url", picture.getPics());
+					intent.putExtra("img_id", picture.getComment_ID());
+					intent.putExtra("thread_key", "comment-" + picture.getComment_ID());
+
+					if (picture.getPics()[0].endsWith(".gif")) {
+						intent.putExtra("is_need_webview", true);
+					}
+
+					startActivity(intent);
+				}
+			});
+
 			holder.tv_author.setText(picture.getComment_author());
 			holder.tv_time.setText(String2TimeUtil.dateString2GoodExperienceFormat(picture.getComment_date()));
 			holder.tv_like.setText(picture.getVote_positive());
@@ -184,7 +338,7 @@ public class PictureFragment extends BaseFragment {
 				@Override
 				public void onClick(View v) {
 					new MaterialDialog.Builder(getActivity())
-							.items(R.array.joke_dialog)
+							.items(R.array.picture_dialog)
 							.itemsCallback(new MaterialDialog.ListCallback() {
 								@Override
 								public void onSelection(MaterialDialog dialog, View view, int which, CharSequence text) {
@@ -192,16 +346,13 @@ public class PictureFragment extends BaseFragment {
 									switch (which) {
 										//分享
 										case 0:
-											ShareUtil.shareText(getActivity(), picture.getComment_content());
+											ShareUtil.sharePicture(getActivity(), picture
+													.getPics()[0]);
 											break;
-										//复制
+										//保存
 										case 1:
-											ClipboardManager clip = (ClipboardManager)
-													getActivity().getSystemService(Context
-															.CLIPBOARD_SERVICE);
-											clip.setPrimaryClip(ClipData.newPlainText
-													(null, picture.getComment_content()));
-											ShowToast.Short(ToastMsg.COPY_SUCCESS);
+											FileUtil.savePicture(getActivity(), picture
+													.getPics()[0]);
 											break;
 									}
 
@@ -220,12 +371,13 @@ public class PictureFragment extends BaseFragment {
 			holder.ll_comment.setOnClickListener(new View.OnClickListener() {
 				@Override
 				public void onClick(View v) {
-
 					Intent intent = new Intent(getActivity(), CommentListActivity.class);
 					intent.putExtra("thread_key", "comment-" + picture.getComment_ID());
 					startActivity(intent);
 				}
 			});
+
+			setAnimation(holder.card, position);
 
 		}
 
@@ -324,21 +476,31 @@ public class PictureFragment extends BaseFragment {
 
 		@Override
 		public int getItemCount() {
-			return mJokes.size();
+			return pictures.size();
 		}
 
 		public void loadFirst() {
 			page = 1;
-			loadData();
+			loadDataByNetworkType();
 		}
 
 		public void loadNextPage() {
 			page++;
-			loadData();
+			loadDataByNetworkType();
+		}
+
+		private void loadDataByNetworkType() {
+
+			if (NetWorkUtil.isNetWorkConnected(getActivity())) {
+				loadData();
+			} else {
+				loadCache();
+			}
+
 		}
 
 		private void loadData() {
-			executeRequest(new Request4Picture(Picture.getRequestUrl(page),
+			executeRequest(new Request4Picture(Picture.getRequestUrl(Picture.PictureType.Duanzi, page),
 					new Response.Listener<ArrayList<Picture>>
 							() {
 						@Override
@@ -349,7 +511,7 @@ public class PictureFragment extends BaseFragment {
 				@Override
 				public void onErrorResponse(VolleyError error) {
 
-					tv_error.setVisibility(View.VISIBLE);
+					ShowToast.Short(ToastMsg.LOAD_FAILED);
 					google_progress.setVisibility(View.GONE);
 					mLoadFinisCallBack.loadFinish(null);
 					if (mSwipeRefreshLayout.isRefreshing()) {
@@ -359,6 +521,29 @@ public class PictureFragment extends BaseFragment {
 			}));
 		}
 
+		/**
+		 * 从缓存中加载
+		 */
+		private void loadCache() {
+
+			google_progress.setVisibility(View.GONE);
+			mLoadFinisCallBack.loadFinish(null);
+			if (mSwipeRefreshLayout.isRefreshing()) {
+				mSwipeRefreshLayout.setRefreshing(false);
+			}
+
+			PictureCacheUtil pictureCacheUtil = PictureCacheUtil.getInstance(getActivity());
+			if (page == 1) {
+				pictures.clear();
+				ShowToast.Short(ToastMsg.LOAD_NO_NETWORK);
+			}
+
+			pictures.addAll(pictureCacheUtil.getCacheByPage(page));
+			notifyDataSetChanged();
+
+		}
+
+
 		//获取评论数量
 		private void getCommentCounts(final ArrayList<Picture> pictures) {
 
@@ -367,39 +552,41 @@ public class PictureFragment extends BaseFragment {
 				sb.append("comment-" + joke.getComment_ID() + ",");
 			}
 
-			executeRequest(new Request4CommentCounts(Comment.getCommentCountsURL(sb.toString()), new Response
-					.Listener<ArrayList<Comment>>() {
+			executeRequest(new Request4CommentCounts(CommentNumber.getCommentCountsURL(sb.toString()), new Response
+					.Listener<ArrayList<CommentNumber>>() {
 
 				@Override
-				public void onResponse(ArrayList<Comment> response) {
+				public void onResponse(ArrayList<CommentNumber> response) {
 
+					mLoadFinisCallBack.loadFinish(null);
 					google_progress.setVisibility(View.GONE);
 					tv_error.setVisibility(View.GONE);
+					if (mSwipeRefreshLayout.isRefreshing()) {
+						mSwipeRefreshLayout.setRefreshing(false);
+					}
 
 					for (int i = 0; i < pictures.size(); i++) {
 						pictures.get(i).setComment_counts(response.get(i).getComments() + "");
 					}
 
 					if (page == 1) {
-						mJokes.clear();
-						mJokes.addAll(pictures);
-					} else {
-						mJokes.addAll(pictures);
+						PictureAdapter.this.pictures.clear();
+						PictureCacheUtil.getInstance(getActivity()).clearAllCache();
 					}
 
+					PictureAdapter.this.pictures.addAll(pictures);
 					notifyDataSetChanged();
 
-					if (mSwipeRefreshLayout.isRefreshing()) {
-						mSwipeRefreshLayout.setRefreshing(false);
-					}
+					//加载完毕后缓存
+					PictureCacheUtil.getInstance(getActivity()).addResultCache(JSONParser.toString
+									(pictures),page);
 
-					mLoadFinisCallBack.loadFinish(null);
 				}
 			}, new Response.ErrorListener() {
 				@Override
 				public void onErrorResponse(VolleyError error) {
 					mLoadFinisCallBack.loadFinish(null);
-					tv_error.setVisibility(View.VISIBLE);
+					ShowToast.Short(ToastMsg.LOAD_FAILED);
 					google_progress.setVisibility(View.GONE);
 					if (mSwipeRefreshLayout.isRefreshing()) {
 						mSwipeRefreshLayout.setRefreshing(false);
@@ -425,12 +612,20 @@ public class PictureFragment extends BaseFragment {
 		private TextView tv_support_des;
 
 		private ImageView img_share;
+		private ImageView img_gif;
+		private ShowMaxImageView img;
 
 		private LinearLayout ll_support;
 		private LinearLayout ll_unsupport;
 		private LinearLayout ll_comment;
+
+		private ProgressBar progress;
+
+		private CardView card;
+
 		//用于处理多次点击造成的网络访问
 		private boolean isClickFinish;
+
 
 		public ViewHolder(View contentView) {
 			super(contentView);
@@ -447,6 +642,11 @@ public class PictureFragment extends BaseFragment {
 			tv_support_des = (TextView) contentView.findViewById(R.id.tv_support_des);
 
 			img_share = (ImageView) contentView.findViewById(R.id.img_share);
+			img_gif = (ImageView) contentView.findViewById(R.id.img_gif);
+			img = (ShowMaxImageView) contentView.findViewById(R.id.img);
+
+			progress = (ProgressBar) contentView.findViewById(R.id.progress);
+			card = (CardView) contentView.findViewById(R.id.card);
 
 			ll_support = (LinearLayout) contentView.findViewById(R.id.ll_support);
 			ll_unsupport = (LinearLayout) contentView.findViewById(R.id.ll_unsupport);

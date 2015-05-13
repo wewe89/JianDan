@@ -8,6 +8,7 @@
     android:layout_marginRight="8dp"
     android:layout_marginTop="4dp"
     app:cardBackgroundColor="#FFF"
+    android:id="@+id/card"
     app:cardCornerRadius="2dp"
     app:cardPreventCornerOverlap="true"
     app:cardUseCompatPadding="true"
@@ -64,42 +65,35 @@
 
             <ProgressBar
                 android:id="@+id/progress"
-                android:layout_width="fill_parent"
-                android:layout_height="wrap_content"
+                android:layout_width="match_parent"
+                android:layout_height="16dp"
                 android:layout_alignParentTop="true"
                 android:indeterminate="false"
                 android:indeterminateDrawable="@drawable/progress_indeterminate_horizontal_holo"
                 android:indeterminateOnly="false"
-                android:maxHeight="16.0dip"
-                android:minHeight="16.0dip"
                 android:mirrorForRtl="true"
                 android:progress="0"
+                android:visibility="gone"
                 android:progressDrawable="@drawable/progress_horizontal_holo_dark"/>
 
-            <TextView
-                android:id="@+id/tip"
-                android:layout_width="wrap_content"
+            <com.socks.jiandan.view.ShowMaxImageView
+                android:id="@+id/img"
+                android:layout_below="@id/progress"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_centerInParent="true"
-                android:textStyle="italic"
-                android:visibility="gone"/>
-
-            <ImageView
-                android:id="@+id/img"
-                android:layout_width="fill_parent"
-                android:layout_height="wrap_content"
                 android:contentDescription="@null"
                 android:scaleType="centerCrop"
-                android:visibility="visible"/>
+                />
 
             <ImageView
-                android:id="@+id/gif_play"
+                android:id="@+id/img_gif"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_centerInParent="true"
                 android:contentDescription="@null"
                 android:src="@drawable/ic_play_gif"
-                android:visibility="visible"/>
+                android:visibility="gone"/>
         </RelativeLayout>
 
         <RelativeLayout

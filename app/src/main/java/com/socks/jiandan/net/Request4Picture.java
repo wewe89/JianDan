@@ -33,9 +33,11 @@ public class Request4Picture extends Request<ArrayList<Picture>> {
 			String jsonStr = new String(response.data, HttpHeaderParser.parseCharset(response.headers));
 			jsonStr = new JSONObject(jsonStr).getJSONArray("comments").toString();
 
-			return Response.success((ArrayList<Picture>) JSONParser.toObject(jsonStr,
+			ArrayList<Picture> pictures = (ArrayList<Picture>) JSONParser.toObject(jsonStr,
 					new TypeToken<ArrayList<Picture>>() {
-					}.getType()), HttpHeaderParser.parseCacheHeaders(response));
+					}.getType());
+
+			return Response.success(pictures, HttpHeaderParser.parseCacheHeaders(response));
 
 		} catch (Exception e) {
 			e.printStackTrace();

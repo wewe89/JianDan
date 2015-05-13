@@ -4,7 +4,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
-import android.net.Uri;
+import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.ActionBar;
@@ -17,13 +17,15 @@ import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.afollestad.materialdialogs.MaterialDialog;
 import com.android.volley.Response;
 import com.android.volley.VolleyError;
-import com.facebook.drawee.view.SimpleDraweeView;
+import com.nostra13.universalimageloader.core.DisplayImageOptions;
+import com.nostra13.universalimageloader.core.ImageLoader;
 import com.socks.jiandan.R;
 import com.socks.jiandan.base.BaseActivity;
 import com.socks.jiandan.callback.LoadFinishCallBack;
@@ -33,8 +35,6 @@ import com.socks.jiandan.net.Request4CommentList;
 import com.socks.jiandan.utils.ShowToast;
 import com.socks.jiandan.utils.String2TimeUtil;
 import com.socks.jiandan.utils.SwipeBackUtil;
-import com.socks.jiandan.utils.TextUtil;
-import com.socks.jiandan.utils.logger.Logger;
 import com.socks.jiandan.view.floorview.FloorView;
 import com.socks.jiandan.view.floorview.SubComments;
 import com.socks.jiandan.view.floorview.SubFloorFactory;
@@ -67,6 +67,9 @@ public class CommentListActivity extends BaseActivity {
 	private String thread_id;
 	private CommentAdapter mAdapter;
 	private SwipeBackUtil mSwipeBackUtil;
+
+	private ImageLoader imageLoader;
+	private DisplayImageOptions options;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -103,6 +106,16 @@ public class CommentListActivity extends BaseActivity {
 				mAdapter.loadData();
 			}
 		});
+
+		imageLoader = ImageLoader.getInstance();
+
+		options = new DisplayImageOptions.Builder()
+				.cacheInMemory(true)
+				.cacheOnDisk(true)
+				.bitmapConfig(Bitmap.Config.RGB_565)
+				.resetViewBeforeLoading(true)
+				.showImageOnLoading(R.drawable.ic_loading_small)
+				.build();
 
 	}
 
@@ -201,7 +214,6 @@ public class CommentListActivity extends BaseActivity {
 									})
 									.show();
 
-
 						}
 					});
 
@@ -224,13 +236,7 @@ public class CommentListActivity extends BaseActivity {
 						holder.floors_parent.setVisibility(View.GONE);
 					}
 
-					if (!TextUtil.isNull(commentator.getAvatar_url())) {
-						String headerUrl = commentator.getAvatar_url();
-						Logger.d("headerUrl = " + headerUrl);
-						holder.img_header.setImageURI(Uri.parse(headerUrl));
-					} else {
-						holder.img_header.setImageURI(null);
-					}
+					imageLoader.displayImage(commentator.getAvatar_url(), holder.img_header);
 
 					break;
 			}
@@ -245,7 +251,7 @@ public class CommentListActivity extends BaseActivity {
 			}
 
 			List<String> parentIds = Arrays.asList(commentator.getParents());
-			List<Commentator> commentators = new ArrayList<>();
+			ArrayList<Commentator> commentators = new ArrayList<>();
 
 			for (Commentator comm : this.commentators) {
 
@@ -345,7 +351,7 @@ public class CommentListActivity extends BaseActivity {
 		private TextView tv_content;
 		private TextView tv_time;
 		private LinearLayout ll_vote;
-		private SimpleDraweeView img_header;
+		private ImageView img_header;
 		private FloorView floors_parent;
 
 		private TextView tv_flag;
@@ -356,7 +362,7 @@ public class CommentListActivity extends BaseActivity {
 			tv_content = (TextView) itemView.findViewById(R.id.tv_content);
 			tv_time = (TextView) itemView.findViewById(R.id.tv_time);
 			ll_vote = (LinearLayout) itemView.findViewById(R.id.ll_vote);
-			img_header = (SimpleDraweeView) itemView.findViewById(R.id.img_header);
+			img_header = (ImageView) itemView.findViewById(R.id.img_header);
 			floors_parent = (FloorView) itemView.findViewById(R.id.floors_parent);
 
 			tv_flag = (TextView) itemView.findViewById(R.id.tv_flag);
